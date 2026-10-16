@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Dashboard de Médias</title>
+<style>
+    body { font-family: Arial; margin: 20px; }
+    select { margin: 10px; padding: 5px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #eee; }
+</style>
+</head>
+<body>
+
+<h2>Dashboard de Médias por Professor</h2>
+
+<label>Professor:</label>
+<select id="professorSelect"></select>
+
+<label>Ano/Período:</label>
+<select id="periodoSelect"></select>
+
+<label>Unidade Curricular:</label>
+<select id="ucSelect"></select>
+
+<div id="resultado"></div>
+
+<script>
+// =========================
+// 1. Carregar JSON
+// =========================
+async function carregarDados() {
+    try {
+        const response = await fetch("RelatorioMedias.json");
+        if (!response.ok){
+            throw new Error("Http " + response.status);
+        }
+        return await response.json();
+    } catch (err){
+        document.getElementById("resultado").innerHTML = 
+        "<p style = 'color:red' >Erro ao carregar o JSON: " + err.message + "</p>";
+        console.error("Erro no fetch:", err);
+    }
+        //const dados = await response.json();
+    //return dados;
+}
+
+// =========================
+// 2. Extrair informações
+// =========================
+function processarDados(dados) {
+    const professores = new Set();
+    const periodos = new Set();
+    const ucs = new Set();
+
+    const registros = [];
+
+    dados.forEach(tabela => {
+        tabela.linhas.forEach(linha => {
+            if (!linha["Componente Curricular"]) return;
+
+            const componente = linha["Componente Curricular"];
+            const mediaGeral = parseFloat(linha["Média\nGeral"]);
+            const dp = parseFloat(linha[""]);
+            const trancamentos = parseInt(linha["Turma Discentes Trancamentos"]);
+            const avaliacao = parseFloat(linha["Avaliação\ndos docentes\ndas unidades\ncurriculares"]);
+
+            // EXEMPLO: extrair professor e período do código da UC
+            const partes = componente.split(" - ");
+            const codigo = partes[0];
+            const nomeUC = partes[1];
+
+            const professor = "Professor " + codigo.substring(0, 3); // Exemplo fictício
+            const periodo = "2024/1"; // Ajuste conforme sua lógica real
+
+            professores.add(professor);
+            periodos.add(periodo);
+            ucs.add(nomeUC);
+
+            registros.push({
+                professor,
+                periodo,
+                uc: nomeUC,
+                mediaGeral,
+                dp,
+                trancamentos,
+                avaliacao
+            });
+        });
+    });
+
+    return { professores, periodos, ucs, registros };
+}
+
+// =========================
+// 3. Preencher selects
+// =========================
+function preencherSelect(id, valores) {
+    const select = document.getElementById(id);
+    select.innerHTML = `<option value="">Todos</option>`;
+    valores.forEach(v => {
+        select.innerHTML += `<option value="${v}">${v}</option>`;
+    });
+}
+
+// =========================
+// 4. Filtrar e calcular média
+// =========================
+function atualizarDashboard(registros) {
+    const professorSel = document.getElementById("professorSelect").value;
+    const periodoSel = document.getElementById("periodoSelect").value;
+    const ucSel = document.getElementById("ucSelect").value;
+
+    let filtrados = registros;
+
+    if (professorSel) filtrados = filtrados.filter(r => r.professor === professorSel);
+    if (periodoSel) filtrados = filtrados.filter(r => r.periodo === periodoSel);
+    if (ucSel) filtrados = filtrados.filter(r => r.uc === ucSel);
+
+    let mediaProfessor = 0;
+    if (filtrados.length > 0) {
+        mediaProfessor = filtrados.reduce((acc, r) => acc + r.mediaGeral, 0) / filtrados.length;
+    }
+
+    let html = `
+        <h3>Resultados</h3>
+        <p><strong>Média Geral do Professor:</strong> ${mediaProfessor.toFixed(2)}</p>
+        <table>
+            <tr>
+                <th>Professor</th>
+                <th>Período</th>
+                <th>UC</th>
+                <th>Média Geral</th>
+                <th>DP</th>
+                <th>Trancamentos</th>
+                <th>Avaliação Docente</th>
+            </tr>
+    `;
+
+    filtrados.forEach(r => {
+        html += `
+            <tr>
+                <td>${r.professor}</td>
+                <td>${r.periodo}</td>
+                <td>${r.uc}</td>
+                <td>${r.mediaGeral}</td>
+                <td>${r.dp}</td>
+                <td>${r.trancamentos}</td>
+                <td>${r.avaliacao}</td>
+            </tr>
+        `;
+    });
+
+    html += "</table>";
+
+    document.getElementById("resultado").innerHTML = html;
+}
+
+// =========================
+// 5. Inicializar dashboard
+// =========================
+(async () => {
+    const dados = await carregarDados();
+    const { professores, periodos, ucs, registros } = processarDados(dados);
+
+    preencherSelect("professorSelect", professores);
+    preencherSelect("periodoSelect", periodos);
+    preencherSelect("ucSelect", ucs);
+
+    document.querySelectorAll("select").forEach(sel => {
+        sel.addEventListener("change", () => atualizarDashboard(registros));
+    });
+
+    atualizarDashboard(registros);
+})();
+</script>
+
+</body>
+</html>
